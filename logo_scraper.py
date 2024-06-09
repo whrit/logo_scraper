@@ -85,9 +85,31 @@ def scrape_logos_from_all_pages(start_page_url, download_folder):
 download_folder = "downloaded_logos"
 os.makedirs(download_folder, exist_ok=True)
 
-# Start scraping from the first page
-start_page_url = "https://www.logo.wine/Technology"
-scrape_logos_from_all_pages(start_page_url, download_folder)
+# List of URLs to scrape
+urls_to_scrape = [
+    "https://www.logo.wine/Technology",
+    "https://www.logo.wine/Airlines",
+    "https://www.logo.wine/Beverage",
+    "https://www.logo.wine/Cars",
+    "https://www.logo.wine/Education",
+    "https://www.logo.wine/Entertainment",
+    "https://www.logo.wine/Fashion",
+    "https://www.logo.wine/Finance",
+    "https://www.logo.wine/Food",
+    "https://www.logo.wine/Government",
+    "https://www.logo.wine/Legal",
+    "https://www.logo.wine/Medical",
+    "https://www.logo.wine/Petroleum",
+    "https://www.logo.wine/Real_Estate",
+    "https://www.logo.wine/Retail",
+    "https://www.logo.wine/Sports",
+    "https://www.logo.wine/Travel",
+    # Add more URLs as needed
+]
+
+# Start scraping from each URL in the list
+for url in urls_to_scrape:
+    scrape_logos_from_all_pages(url, download_folder)
 
 # Quit the WebDriver
 driver.quit()
