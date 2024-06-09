@@ -8,7 +8,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
-import cairosvg
 import concurrent.futures
 
 # Set up the Chrome WebDriver
@@ -19,24 +18,18 @@ options.add_argument("--disable-dev-shm-usage")
 
 driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
 
-# Function to download and convert SVG to PNG
-def download_and_convert_svg(logo_url, logo_name, download_folder):
+# Function to download SVG file
+def download_svg(logo_url, logo_name, download_folder):
     try:
         response = requests.get(logo_url, timeout=10)
         if response.status_code == 200:
             svg_path = os.path.join(download_folder, f"{logo_name}.svg")
-            png_path = os.path.join(download_folder, f"{logo_name}.png")
 
             # Save SVG file
             with open(svg_path, 'wb') as f:
                 f.write(response.content)
 
-            # Convert SVG to PNG
-            cairosvg.svg2png(url=svg_path, write_to=png_path)
-            print(f"Downloaded and converted {logo_name}")
-
-            # Remove the SVG file after conversion
-            os.remove(svg_path)
+            print(f"Downloaded {logo_name}")
         else:
             print(f"Failed to download {logo_name}")
     except Exception as e:
@@ -63,8 +56,8 @@ def extract_logos_from_page(download_folder):
                     # Replace spaces with underscores in the logo name for the filename
                     logo_name_sanitized = logo_name.replace(" ", "_")
 
-                    # Download and convert the logo image in parallel
-                    logo_tasks.append(executor.submit(download_and_convert_svg, logo_url, logo_name_sanitized, download_folder))
+                    # Download the logo image in parallel
+                    logo_tasks.append(executor.submit(download_svg, logo_url, logo_name_sanitized, download_folder))
             except Exception as e:
                 print(f"Error processing logo: {e}")
 
