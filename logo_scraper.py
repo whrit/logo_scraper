@@ -43,7 +43,7 @@ def extract_logos_from_page(download_folder):
     logos = soup.find_all('a', class_='svelte-1wqkjra')
 
     logo_tasks = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         for logo in logos:
             try:
                 logo_img_tag = logo.find('img')
