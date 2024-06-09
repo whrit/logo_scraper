@@ -1,0 +1,125 @@
+ERROR:root:Error downloading logo for Wikipedia: Message: invalid argument
+  (Session info: chrome-headless-shell=125.0.6422.142)
+Stacktrace:
+0   chromedriver                        0x000000010079e4c8 chromedriver + 4302024
+1   chromedriver                        0x0000000100796e10 chromedriver + 4271632
+2   chromedriver                        0x00000001003c8000 chromedriver + 278528
+3   chromedriver                        0x00000001003b20fc chromedriver + 188668
+4   chromedriver                        0x00000001003b0898 chromedriver + 182424
+5   chromedriver                        0x00000001003b11dc chromedriver + 184796
+6   chromedriver                        0x00000001003ca730 chromedriver + 288560
+7   chromedriver                        0x0000000100443400 chromedriver + 783360
+8   chromedriver                        0x0000000100442c5c chromedriver + 781404
+9   chromedriver                        0x00000001003ff004 chromedriver + 503812
+10  chromedriver                        0x00000001003ff9ec chromedriver + 506348
+11  chromedriver                        0x0000000100766510 chromedriver + 4072720
+12  chromedriver                        0x000000010076afbc chromedriver + 4091836
+13  chromedriver                        0x000000010074d754 chromedriver + 3970900
+14  chromedriver                        0x000000010076b8a4 chromedriver + 4094116
+15  chromedriver                        0x00000001007406d4 chromedriver + 3917524
+16  chromedriver                        0x0000000100788b08 chromedriver + 4213512
+17  chromedriver                        0x0000000100788c84 chromedriver + 4213892
+18  chromedriver                        0x0000000100796a08 chromedriver + 4270600
+19  libsystem_pthread.dylib             0x00000001877b2f94 _pthread_start + 136
+20  libsystem_pthread.dylib             0x00000001877add34 thread_start + 8
+
+ERROR:root:Error downloading logo for YouTube: Message: invalid argument
+  (Session info: chrome-headless-shell=125.0.6422.142)
+Stacktrace:
+0   chromedriver                        0x000000010079e4c8 chromedriver + 4302024
+1   chromedriver                        0x0000000100796e10 chromedriver + 4271632
+2   chromedriver                        0x00000001003c8000 chromedriver + 278528
+3   chromedriver                        0x00000001003b20fc chromedriver + 188668
+4   chromedriver                        0x00000001003b0898 chromedriver + 182424
+5   chromedriver                        0x00000001003b11dc chromedriver + 184796
+6   chromedriver                        0x00000001003ca730 chromedriver + 288560
+7   chromedriver                        0x0000000100443400 chromedriver + 783360
+8   chromedriver                        0x0000000100442c5c chromedriver + 781404
+9   chromedriver                        0x00000001003ff004 chromedriver + 503812
+10  chromedriver                        0x00000001003ff9ec chromedriver + 506348
+11  chromedriver                        0x0000000100766510 chromedriver + 4072720
+12  chromedriver                        0x000000010076afbc chromedriver + 4091836
+13  chromedriver                        0x000000010074d754 chromedriver + 3970900
+14  chromedriver                        0x000000010076b8a4 chromedriver + 4094116
+15  chromedriver                        0x00000001007406d4 chromedriver + 3917524
+16  chromedriver                        0x0000000100788b08 chromedriver + 4213512
+17  chromedriver                        0x0000000100788c84 chromedriver + 4213892
+18  chromedriver                        0x0000000100796a08 chromedriver + 4270600
+19  libsystem_pthread.dylib             0x00000001877b2f94 _pthread_start + 136
+20  libsystem_pthread.dylib             0x00000001877add34 thread_start + 8
+
+ERROR:root:Error downloading logo for TikTok: Message: invalid argument
+  (Session info: chrome-headless-shell=125.0.6422.142)
+Stacktrace:
+0   chromedriver                        0x000000010079e4c8 chromedriver + 4302024
+1   chromedriver                        0x0000000100796e10 chromedriver + 4271632
+2   chromedriver                        0x00000001003c8000 chromedriver + 278528
+3   chromedriver                        0x00000001003b20fc chromedriver + 188668
+4   chromedriver                        0x00000001003b0898 chromedriver + 182424
+5   chromedriver                        0x00000001003b11dc chromedriver + 184796
+6   chromedriver                        0x00000001003ca730 chromedriver + 288560
+7   chromedriver                        0x0000000100443400 chromedriver + 783360
+8   chromedriver                        0x0000000100442c5c chromedriver + 781404
+9   chromedriver                        0x00000001003ff004 chromedriver + 503812
+10  chromedriver                        0x00000001003ff9ec chromedriver + 506348
+11  chromedriver                        0x0000000100766510 chromedriver + 4072720
+12  chromedriver                        0x000000010076afbc chromedriver + 4091836
+13  chromedriver                        0x000000010074d754 chromedriver + 3970900
+14  chromedriver                        0x000000010076b8a4 chromedriver + 4094116
+15  chromedriver                        0x00000001007406d4 chromedriver + 3917524
+16  chromedriver                        0x0000000100788b08 chromedriver + 4213512
+17  chromedriver                        0x0000000100788c84 chromedriver + 4213892
+18  chromedriver                        0x0000000100796a08 chromedriver + 4270600
+19  libsystem_pthread.dylib             0x00000001877b2f94 _pthread_start + 136
+20  libsystem_pthread.dylib             0x00000001877add34 thread_start + 8
+
+ERROR:root:Error downloading logo for Star Wars: Message: invalid argument
+  (Session info: chrome-headless-shell=125.0.6422.142)
+Stacktrace:
+0   chromedriver                        0x000000010079e4c8 chromedriver + 4302024
+1   chromedriver                        0x0000000100796e10 chromedriver + 4271632
+2   chromedriver                        0x00000001003c8000 chromedriver + 278528
+3   chromedriver                        0x00000001003b20fc chromedriver + 188668
+4   chromedriver                        0x00000001003b0898 chromedriver + 182424
+5   chromedriver                        0x00000001003b11dc chromedriver + 184796
+6   chromedriver                        0x00000001003ca730 chromedriver + 288560
+7   chromedriver                        0x0000000100443400 chromedriver + 783360
+8   chromedriver                        0x0000000100442c5c chromedriver + 781404
+9   chromedriver                        0x00000001003ff004 chromedriver + 503812
+10  chromedriver                        0x00000001003ff9ec chromedriver + 506348
+11  chromedriver                        0x0000000100766510 chromedriver + 4072720
+12  chromedriver                        0x000000010076afbc chromedriver + 4091836
+13  chromedriver                        0x000000010074d754 chromedriver + 3970900
+14  chromedriver                        0x000000010076b8a4 chromedriver + 4094116
+15  chromedriver                        0x00000001007406d4 chromedriver + 3917524
+16  chromedriver                        0x0000000100788b08 chromedriver + 4213512
+17  chromedriver                        0x0000000100788c84 chromedriver + 4213892
+18  chromedriver                        0x0000000100796a08 chromedriver + 4270600
+19  libsystem_pthread.dylib             0x00000001877b2f94 _pthread_start + 136
+20  libsystem_pthread.dylib             0x00000001877add34 thread_start + 8
+
+ERROR:root:Error downloading logo for Meta Platforms: Message: invalid argument
+  (Session info: chrome-headless-shell=125.0.6422.142)
+Stacktrace:
+0   chromedriver                        0x000000010079e4c8 chromedriver + 4302024
+1   chromedriver                        0x0000000100796e10 chromedriver + 4271632
+2   chromedriver                        0x00000001003c8000 chromedriver + 278528
+3   chromedriver                        0x00000001003b20fc chromedriver + 188668
+4   chromedriver                        0x00000001003b0898 chromedriver + 182424
+5   chromedriver                        0x00000001003b11dc chromedriver + 184796
+6   chromedriver                        0x00000001003ca730 chromedriver + 288560
+7   chromedriver                        0x0000000100443400 chromedriver + 783360
+8   chromedriver                        0x0000000100442c5c chromedriver + 781404
+9   chromedriver                        0x00000001003ff004 chromedriver + 503812
+10  chromedriver                        0x00000001003ff9ec chromedriver + 506348
+11  chromedriver                        0x0000000100766510 chromedriver + 4072720
+12  chromedriver                        0x000000010076afbc chromedriver + 4091836
+13  chromedriver                        0x000000010074d754 chromedriver + 3970900
+14  chromedriver                        0x000000010076b8a4 chromedriver + 4094116
+15  chromedriver                        0x00000001007406d4 chromedriver + 3917524
+16  chromedriver                        0x0000000100788b08 chromedriver + 4213512
+17  chromedriver                        0x0000000100788c84 chromedriver + 4213892
+18  chromedriver                        0x0000000100796a08 chromedriver + 4270600
+19  libsystem_pthread.dylib             0x00000001877b2f94 _pthread_start + 136
+20  libsystem_pthread.dylib             0x00000001877add34 thread_start + 8
+
