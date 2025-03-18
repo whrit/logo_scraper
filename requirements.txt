@@ -1,5 +1,8 @@
-beautifulsoup4==4.12.3
-CairoSVG==2.7.1
-Requests==2.32.3
-selenium==4.21.0
-webdriver_manager==4.0.1
+beautifulsoup4
+requests
+python-dotenv
+Pillow
+anthropic
+fastapi
+uvicorn
+pydantic

@@ -3,3 +3,4 @@ ScrapeTest_Input1.csv
 downloaded_logos/
 downloaded_logos_svglogos_com/
 .env
+__pycache__/
