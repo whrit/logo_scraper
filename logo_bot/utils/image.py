@@ -70,6 +70,11 @@ def download_image(image_url, output_path, max_retries=3, timeout=10):
     """
     from ..extractors.google import GoogleExtractor
     
+    # Handle data URLs directly
+    if image_url.startswith('data:'):
+        print(f"Detected data URL, processing directly")
+        return save_data_uri(image_url, output_path)
+    
     # Skip URLs with known access issues that direct approaches can't handle
     if 'trust.new-innov.com' in image_url:
         print(f"URL {image_url} requires special handling - using advanced Google extractor")
@@ -106,14 +111,33 @@ def download_image(image_url, output_path, max_retries=3, timeout=10):
                     
                     # Verify it's a valid image file
                     if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-                        try:
-                            Image.open(file_path).verify()
-                            return file_path
-                        except (UnidentifiedImageError, OSError, IOError) as e:
-                            print(f"Downloaded file is not a valid image: {e}")
-                            # If it's not a valid image, delete it
-                            if os.path.exists(file_path):
-                                os.remove(file_path)
+                        # Special handling for SVG files which can't be verified with PIL
+                        if file_path.lower().endswith('.svg'):
+                            # For SVG files, just check if the file exists and has content
+                            try:
+                                with open(file_path, 'rb') as f:
+                                    svg_content = f.read(1024)  # Read first 1KB
+                                    if b'<svg' in svg_content or b'<?xml' in svg_content:
+                                        print(f"SVG file appears valid: {file_path}")
+                                        return file_path
+                                    else:
+                                        print(f"Downloaded SVG file doesn't contain SVG content")
+                                        if os.path.exists(file_path):
+                                            os.remove(file_path)
+                            except Exception as e:
+                                print(f"Error reading SVG file: {e}")
+                                if os.path.exists(file_path):
+                                    os.remove(file_path)
+                        else:
+                            # For other image formats, use PIL verification
+                            try:
+                                Image.open(file_path).verify()
+                                return file_path
+                            except Exception as e:
+                                print(f"Downloaded file is not a valid image: {e}")
+                                # If it's not a valid image, delete it
+                                if os.path.exists(file_path):
+                                    os.remove(file_path)
                 else:
                     print(f"URL does not point to an image. Content-Type: {content_type}")
             else:
@@ -477,29 +501,23 @@ def process_logo_image(image_path):
         if image_path.lower().endswith('.svg'):
             # SVG files can't be processed by PIL, just check if they're valid SVG files
             try:
-                # Try to read as binary first since it might be compressed
+                # Try to read the file
                 with open(image_path, 'rb') as f:
                     svg_content = f.read()
-                    # Check for SVG signature bytes or text
-                    if b'<svg' in svg_content and b'</svg>' in svg_content:
-                        print(f"SVG file appears valid: {image_path}")
-                        # Return as-is since we can't process SVGs with PIL
-                        return image_path, True, []
-                    else:
-                        # If not binary SVG, try text
-                        try:
-                            svg_text = svg_content.decode('utf-8')
-                            if '<svg' in svg_text and '</svg>' in svg_text:
-                                print(f"SVG file appears valid (text format): {image_path}")
-                                return image_path, True, []
-                        except UnicodeDecodeError:
-                            pass
-                        
-                        print(f"File is not a valid SVG: {image_path}")
-                        return None, False, ["Image is not a valid SVG file"]
+                    
+                # Check for SVG signature bytes or text
+                if b'<svg' in svg_content or b'<?xml' in svg_content:
+                    print(f"SVG file appears valid: {image_path}")
+                    # Return as-is since we can't process SVGs with PIL
+                    return image_path, True, []
+                else:
+                    print(f"File does not contain SVG content: {image_path}")
+                    # If it's not an SVG file but has .svg extension, delete it
+                    os.remove(image_path)
+                    return None, False, ["File is not a valid SVG file"]
             except Exception as e:
-                print(f"Error reading SVG file: {e}")
-                return None, False, ["Image is corrupted or not a valid SVG file"]
+                print(f"Error processing SVG file: {e}")
+                return None, False, [f"Error processing SVG file: {str(e)}"]
         
         # For WebP images, convert to PNG for better compatibility
         if image_path.lower().endswith('.webp'):

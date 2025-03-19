@@ -3,6 +3,7 @@ import json
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
+import os
 
 from .base import BaseExtractor
 from ..utils import url as url_utils
@@ -47,8 +48,11 @@ class BeautifulSoupExtractor(BaseExtractor):
             # Otherwise it's an image URL
             header_logo = header_result
             if header_logo and image_utils.is_valid_image_url(header_logo):
+                # Skip placeholder SVG images
+                if 'data:image/svg' in header_logo and 'nitro-empty-id' in header_logo:
+                    print(f"Skipping nitro placeholder SVG: {header_logo[:50]}...")
                 # Make sure it's not a hero image or favicon
-                if not image_utils.is_likely_hero_image(header_logo) and 'favicon' not in header_logo.lower():
+                elif not image_utils.is_likely_hero_image(header_logo) and 'favicon' not in header_logo.lower():
                     print(f"Found valid logo in header/navbar: {header_logo}")
                     return header_logo
                 elif image_utils.is_likely_hero_image(header_logo):
@@ -377,257 +381,110 @@ class BeautifulSoupExtractor(BaseExtractor):
     
     def _find_potential_logos(self):
         """
-        Find all potential logo images on a website and rank them by likelihood
+        Search the entire document for potential logo images
         
         Returns:
-            list: List of dictionaries containing logo candidates
+            list: List of potential logo URLs sorted by priority
         """
         try:
             html = url_utils.fetch_website_html(self.website_url)
             if not html:
                 return []
                 
-            soup = BeautifulSoup(html, 'html.parser')
+            soup = BeautifulSoup(html, DEFAULT_PARSER)
             base_url = url_utils.get_base_url(self.website_url)
             
-            # Dictionary to store image URLs with useful attributes
-            images = []
+            # Store potential logo candidates
+            potential_logos = []
             
-            # Logo keywords for efficient matching
-            logo_keywords = ['logo', 'brand', 'header', 'site-icon', 'site-logo']
-            
-            # Find all img tags
-            for img in soup.find_all('img'):
-                src = img.get('src')
-                
-                # Skip favicon images immediately
-                if src and 'favicon' in src.lower():
-                    continue
-                    
-                # Track if this is in header/navbar for priority scoring
-                parent_tags = [p.name for p in img.parents if p.name]
-                in_header = any(tag in ['header', 'nav'] for tag in parent_tags)
-                
-                # Check parent class attributes for header/navbar indicators
-                parent_classes = []
-                for parent in img.parents:
-                    if parent.get('class'):
-                        parent_classes.extend(parent.get('class'))
-                parent_classes = [cls.lower() for cls in parent_classes if cls]
-                
-                in_header_class = any(cls in ['header', 'navbar', 'nav', 'logo', 'brand'] for cls in parent_classes)
-                header_priority = 10 if in_header or in_header_class else 0
-                
-                # If no src, check for other sources including Nitro-specific attributes
-                if not src:
-                    # First check Nitro-specific attributes
-                    if img.get('nitro-lazy-src') and 'favicon' not in img.get('nitro-lazy-src').lower():
-                        src = img.get('nitro-lazy-src')
-                    # Then check other lazy-loading attributes
-                    else:
-                        for attr in ['data-src', 'data-original', 'data-lazy-src', 'data-fallback-src']:
-                            if img.get(attr) and 'favicon' not in img.get(attr).lower():
-                                src = img.get(attr)
-                                break
-                    
-                    # If still no src found, skip this img
-                    if not src:
+            # Check all images
+            for img in soup.find_all('img', src=True):
+                try:
+                    src = img.get('src', '').strip()
+                    if not src or src.startswith('data:image/gif;') or 'captcha' in src.lower():
                         continue
                         
-                # Check for srcset to get highest resolution image
-                srcset = img.get('srcset') or img.get('nitro-lazy-srcset')
-                highest_res_url = None
-                
-                if srcset:
-                    # Parse srcset to find highest resolution image
-                    try:
-                        srcset_parts = srcset.split(',')
-                        for part in srcset_parts:
-                            part = part.strip()
-                            if not part:
-                                continue
-                            
-                            # Extract URL and width descriptor
-                            url_parts = part.split(' ')
-                            if len(url_parts) >= 1:
-                                url = url_parts[0].strip()
-                                # Skip favicon images
-                                if 'favicon' in url.lower():
-                                    continue
-                                    
-                                # If there's a width descriptor, parse it
-                                width = 0
-                                if len(url_parts) >= 2:
-                                    width_str = url_parts[1].strip()
-                                    if width_str.endswith('w'):
-                                        try:
-                                            width = int(width_str[:-1])
-                                        except ValueError:
-                                            pass
-                            
-                                # Track highest resolution
-                                if not highest_res_url or width > 0:
-                                    highest_res_url = url
-                    except Exception as e:
-                        print(f"Error parsing srcset: {e}")
-                    
-                # Use highest resolution from srcset if available
-                if highest_res_url:
-                    src = highest_res_url
-                    
-                # Fix data URIs
-                if src.startswith('https://data:') or src.startswith('data:'):
-                    src = url_utils.fix_data_uri(src)
-                    
-                # Make relative URLs absolute
-                abs_url = url_utils.make_absolute_url(self.website_url, src)
-                
-                # Skip favicon and hero images
-                if 'favicon' in abs_url.lower() or image_utils.is_likely_hero_image(abs_url):
-                    continue
-                    
-                # Quick check for logo in URL or other attributes
-                alt_text = img.get('alt', '').lower()
-                img_class = ' '.join(img.get('class', [])).lower() if img.get('class') else ''
-                img_id = img.get('id', '').lower()
-                parent_class = ' '.join(img.parent.get('class', [])).lower() if img.parent and img.parent.get('class') else ''
-                parent_id = img.parent.get('id', '').lower() if img.parent else ''
-                
-                # Check if this is likely a logo based on various attributes
-                is_logo_in_url = any(keyword in abs_url.lower() for keyword in logo_keywords)
-                is_logo_in_alt = any(keyword in alt_text for keyword in ['logo', 'brand'])
-                is_logo_in_class = any(keyword in img_class for keyword in logo_keywords)
-                is_logo_in_parent = any(keyword in parent_class for keyword in logo_keywords)
-                
-                # Check if image is in header/navbar
-                in_header_or_nav = False
-                for parent in img.parents:
-                    if parent.name in ['header', 'nav'] or (parent.get('class') and 
-                                    any(cls.lower() in ['header', 'navbar', 'nav', 'topbar'] 
-                                        for cls in parent.get('class'))):
-                        in_header_or_nav = True
-                        break
+                    # Skip empty SVG placeholders (common in sites using optimization)
+                    if ('data:image/svg' in src and 'nitro-empty-id' in src) or (src.startswith('data:') and 'base64' in src and len(src) < 400):
+                        continue
                         
-                # Calculate an initial priority score for this image
-                priority = 0
-                
-                # Location-based scoring
-                if in_header_or_nav:
-                    priority += 15  # Highest priority for header/navbar elements
+                    alt_text = img.get('alt', '').lower()
+                    img_class = ' '.join(img.get('class', [])).lower()
+                    img_id = img.get('id', '').lower()
                     
-                # Attribute-based scoring
-                if is_logo_in_url:
-                    priority += 10
-                if is_logo_in_alt:
-                    priority += 8
-                if is_logo_in_class:
-                    priority += 7
-                if is_logo_in_parent:
-                    priority += 6
+                    # Calculate priority score
+                    priority = 0
                     
-                # Image type scoring
-                if abs_url.lower().endswith('.svg'):
-                    priority += 5  # SVG is highest quality
-                elif abs_url.lower().endswith('.png'):
-                    priority += 3  # PNG is good quality
+                    # Check for logo indicators in attributes
+                    if 'logo' in alt_text or 'logo' in img_class or 'logo' in img_id:
+                        priority += 5
+                        
+                    # Higher priority for images in header/nav
+                    parent_tags = [p.name for p in img.parents]
+                    parent_classes = []
+                    for parent in img.parents:
+                        if parent.get('class'):
+                            parent_classes.extend(parent.get('class'))
                     
-                # Site identity scoring - image in header linking to homepage is very likely a logo
-                if img.parent and img.parent.name == 'a' and img.parent.get('href') in ['/', '#', self.website_url]:
-                    priority += 12
+                    parent_classes = ' '.join(parent_classes).lower()
                     
-                is_likely_logo = (is_logo_in_url or is_logo_in_alt or is_logo_in_class or 
-                                is_logo_in_parent or in_header_or_nav or 
-                                (img.parent and img.parent.name == 'a' and img.parent.get('href') == '/'))
-                
-                # Add to our candidates with calculated priority
-                images.append({
-                    'url': abs_url,
-                    'alt': alt_text,
-                    'class': img_class,
-                    'id': img_id,
-                    'parent_class': parent_class,
-                    'parent_id': parent_id,
-                    'is_likely_logo': is_likely_logo,
-                    'priority': priority,
-                    'width': img.get('width'),
-                    'height': img.get('height')
-                })
-                
-            # Also check for background-image in CSS
-            style_tags = soup.find_all('style')
-            for style in style_tags:
-                if style.string:
-                    background_urls = re.findall(r'background-image:\s*url\([\'"]?([^\'"]+)[\'"]?\)', style.string)
-                    for bg_url in background_urls:
-                        if any(keyword in bg_url.lower() for keyword in logo_keywords) and 'favicon' not in bg_url.lower():
-                            # Make relative URLs absolute
-                            abs_url = url_utils.make_absolute_url(self.website_url, bg_url)
-                                
-                            # Skip hero images
-                            if image_utils.is_likely_hero_image(abs_url):
-                                continue
-                                
-                            images.append({
-                                'url': abs_url,
-                                'alt': '',
-                                'class': '',
-                                'id': '',
-                                'parent_class': '',
-                                'parent_id': '',
-                                'is_likely_logo': True,
-                                'priority': 5
-                            })
+                    if 'header' in parent_tags or 'nav' in parent_tags:
+                        priority += 3
+                    elif any(c in parent_classes for c in ['header', 'navbar', 'nav', 'menu']):
+                        priority += 2
+                        
+                    # Adjust for image size, position
+                    if img.get('width') and img.get('height'):
+                        try:
+                            width = int(img['width']) if isinstance(img['width'], str) and img['width'].isdigit() else 0
+                            height = int(img['height']) if isinstance(img['height'], str) and img['height'].isdigit() else 0
                             
-            # Extract logos from structured data (JSON-LD)
-            json_ld_tags = soup.find_all('script', type='application/ld+json')
-            for tag in json_ld_tags:
-                if tag.string:
-                    try:
-                        data = json.loads(tag.string)
-                        # Extract organization logo
-                        if isinstance(data, dict):
-                            # Check various paths where a logo might be found
-                            logo_paths = [
-                                data.get('logo'),
-                                data.get('image'),
-                                data.get('organization', {}).get('logo'),
-                                data.get('publisher', {}).get('logo')
-                            ]
-                            
-                            for logo_path in logo_paths:
-                                if logo_path:
-                                    # Handle both string URLs and objects with URL
-                                    logo_url = logo_path.get('url') if isinstance(logo_path, dict) else logo_path
-                                    
-                                    if isinstance(logo_url, str) and 'favicon' not in logo_url.lower():
-                                        # Make relative URLs absolute
-                                        abs_url = urljoin(self.website_url, logo_url)
-                                        
-                                        # Skip hero images
-                                        if image_utils.is_likely_hero_image(abs_url):
-                                            continue
-                                        
-                                        images.append({
-                                            'url': abs_url,
-                                            'alt': 'JSON-LD Logo',
-                                            'class': '',
-                                            'id': '',
-                                            'parent_class': '',
-                                            'parent_id': '',
-                                            'is_likely_logo': True,
-                                            'priority': 9
-                                        })
-                    except Exception as e:
-                        print(f"Error parsing JSON-LD: {e}")
-            
-            # Skip favicon images before returning
-            filtered_images = [img for img in images if 'favicon' not in img['url'].lower()]
+                            # Ideal logo size range
+                            if (30 <= width <= 400) and (30 <= height <= 200):
+                                priority += 1
+                            # Too small, probably an icon not a logo
+                            elif width < 20 or height < 20:
+                                priority -= 2
+                            # Too large, probably a banner or hero image
+                            elif width > 600 or height > 400:
+                                priority -= 3
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    # Convert to absolute URL
+                    img_url = url_utils.make_absolute_url(self.website_url, src)
+                    
+                    # Higher priority for SVG (vector) logos
+                    if img_url.lower().endswith('.svg') or 'svg' in img_url.lower():
+                        priority += 1
+                        
+                    # Avoid social media icons
+                    if any(s in img_url.lower() for s in ['facebook', 'twitter', 'instagram', 'youtube', 'linkedin', 'social']):
+                        priority -= 5
+                        
+                    # Avoid payment icons
+                    if any(s in img_url.lower() for s in ['payment', 'visa', 'mastercard', 'amex', 'paypal']):
+                        priority -= 5
+                        
+                    # Bonus for 'logo' in filename
+                    if 'logo' in os.path.basename(img_url).lower():
+                        priority += 2
+                        
+                    potential_logos.append({
+                        'url': img_url,
+                        'priority': priority,
+                        'alt': alt_text,
+                        'class': img_class,
+                        'id': img_id
+                    })
+                except Exception as e:
+                    print(f"Error processing image: {e}")
             
             # Sort by priority (highest first)
-            sorted_images = sorted(filtered_images, key=lambda x: x.get('priority', 0), reverse=True)
+            sorted_logos = sorted(potential_logos, key=lambda x: x['priority'], reverse=True)
             
-            # Return top candidates
-            return sorted_images[:10]  # Return top 10 candidates
+            return sorted_logos
+            
         except Exception as e:
             print(f"Error finding potential logos: {e}")
             return [] 

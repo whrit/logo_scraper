@@ -25,7 +25,22 @@ def is_corrupted_image(image_path):
         print(f"File is empty: {image_path}")
         return True
     
-    # Check if file is an image using imghdr
+    # Special handling for SVG files
+    if image_path.lower().endswith('.svg'):
+        try:
+            # Check if file contains SVG content
+            with open(image_path, 'rb') as f:
+                content = f.read(1024)  # Read first 1KB
+                if b'<svg' in content or b'<?xml' in content:
+                    return False  # SVG content found, not corrupted
+                else:
+                    print(f"SVG file doesn't contain SVG content: {image_path}")
+                    return True
+        except Exception as e:
+            print(f"Error checking SVG file: {e}")
+            return True
+    
+    # For non-SVG files, check using imghdr
     image_type = imghdr.what(image_path)
     if image_type is None:
         print(f"File is not a valid image: {image_path}")
@@ -132,6 +147,14 @@ def check_logo_quality(image_path):
     """
     issues = []
     
+    # Special handling for SVG files (they're vector, so size and other checks don't apply)
+    if image_path.lower().endswith('.svg'):
+        # For SVG, we only check if it's corrupted
+        if is_corrupted_image(image_path):
+            issues.append("SVG file is corrupted or invalid")
+        return len(issues) == 0, issues
+    
+    # For raster images, do full checks
     # Check if image is corrupted
     if is_corrupted_image(image_path):
         issues.append("Image is corrupted or not a valid image file")
@@ -226,6 +249,37 @@ def is_better_format(format1, format2):
     
     # Return True if format1 has higher priority
     return priority1 > priority2
+
+def should_prefer_png(png_url, other_url, width_threshold=200, height_threshold=200):
+    """
+    Determine if we should prefer a PNG over another format when dimensions are similar
+    
+    Args:
+        png_url (dict): Image data containing URL and dimensions for PNG
+        other_url (dict): Image data containing URL and dimensions for another format
+        width_threshold (int): Maximum width difference to consider images similar
+        height_threshold (int): Maximum height difference to consider images similar
+        
+    Returns:
+        bool: True if PNG should be preferred, False otherwise
+    """
+    # If either URL doesn't have dimensions, we can't compare them
+    if not (png_url.get('width') and png_url.get('height') and 
+            other_url.get('width') and other_url.get('height')):
+        return False
+    
+    # Get dimensions
+    png_width = png_url['width']
+    png_height = png_url['height']
+    other_width = other_url['width']
+    other_height = other_url['height']
+    
+    # Check if dimensions are similar (within thresholds)
+    width_similar = abs(png_width - other_width) <= width_threshold
+    height_similar = abs(png_height - other_height) <= height_threshold
+    
+    # If dimensions are similar, prefer PNG over JPG or WEBP
+    return width_similar and height_similar
 
 def get_image_dimensions(image_path):
     """

@@ -511,6 +511,7 @@ class GoogleExtractor(BaseExtractor):
                         continue
             
             high_quality_urls = []
+            image_data = []  # Store image data with dimensions when available
             
             # Process the first 3 images (or fewer if less are available)
             max_images = min(3, len(thumbs))
@@ -563,6 +564,24 @@ class GoogleExtractor(BaseExtractor):
                                     else:
                                         print(f"Found primary image URL: {src}")
                                         if self._is_valid_url(src):
+                                            # Try to get image dimensions
+                                            width = None
+                                            height = None
+                                            try:
+                                                width = int(main_img.get_attribute("width") or 0)
+                                                height = int(main_img.get_attribute("height") or 0)
+                                            except:
+                                                pass
+                                            
+                                            # Add image data with dimensions and format
+                                            image_format = self._get_image_format_from_url(src)
+                                            image_data.append({
+                                                'url': src,
+                                                'width': width,
+                                                'height': height,
+                                                'format': image_format
+                                            })
+                                            
                                             high_quality_urls.append(src)
                                             found_url = True
                                         else:
@@ -606,6 +625,24 @@ class GoogleExtractor(BaseExtractor):
                                                         continue
                                                     
                                                     if self._is_valid_url(src):
+                                                        # Try to get image dimensions
+                                                        width = None
+                                                        height = None
+                                                        try:
+                                                            width = int(img.get_attribute("width") or 0)
+                                                            height = int(img.get_attribute("height") or 0)
+                                                        except:
+                                                            pass
+                                                        
+                                                        # Add image data with dimensions and format
+                                                        image_format = self._get_image_format_from_url(src)
+                                                        image_data.append({
+                                                            'url': src,
+                                                            'width': width,
+                                                            'height': height,
+                                                            'format': image_format
+                                                        })
+                                                        
                                                         high_quality_urls.append(src)
                                                         print(f"Found high-quality image URL: {src}")
                                                         found_url = True
@@ -643,6 +680,15 @@ class GoogleExtractor(BaseExtractor):
                                                     print(f"Skipping Google's own logo from imgres: {url}")
                                                     continue
                                                     
+                                                # Add image URL without knowing dimensions
+                                                image_format = self._get_image_format_from_url(url)
+                                                image_data.append({
+                                                    'url': url,
+                                                    'width': None,
+                                                    'height': None,
+                                                    'format': image_format
+                                                })
+                                                
                                                 high_quality_urls.append(url)
                                                 print(f"Found image URL from imgres: {url}")
                                                 found_url = True
@@ -662,6 +708,15 @@ class GoogleExtractor(BaseExtractor):
                                                     print(f"Skipping Google's own logo: {url}")
                                                     continue
                                                     
+                                                # Add image URL with format extracted from URL
+                                                image_format = match[1]
+                                                image_data.append({
+                                                    'url': url,
+                                                    'width': None,
+                                                    'height': None,
+                                                    'format': image_format
+                                                })
+                                                
                                                 high_quality_urls.append(url)
                                                 print(f"Found logo URL from page source: {url}")
                                                 found_url = True
@@ -680,6 +735,15 @@ class GoogleExtractor(BaseExtractor):
                                                         continue
                                                     
                                                     if self.domain in url.lower():
+                                                        # Add image URL with format extracted from URL
+                                                        image_format = match[1]
+                                                        image_data.append({
+                                                            'url': url,
+                                                            'width': None,
+                                                            'height': None,
+                                                            'format': image_format
+                                                        })
+                                                        
                                                         high_quality_urls.append(url)
                                                         print(f"Found domain-matching image URL from page source: {url}")
                                                         found_url = True
@@ -697,6 +761,15 @@ class GoogleExtractor(BaseExtractor):
                                     if url_param:
                                         url = urllib.parse.unquote(url_param.group(1))
                                         if url.startswith('http'):
+                                            # Add image URL with format
+                                            image_format = self._get_image_format_from_url(url)
+                                            image_data.append({
+                                                'url': url,
+                                                'width': None,
+                                                'height': None,
+                                                'format': image_format
+                                            })
+                                            
                                             high_quality_urls.append(url)
                                             print(f"Found image URL from current URL: {url}")
                                             found_url = True
@@ -734,6 +807,125 @@ class GoogleExtractor(BaseExtractor):
             print(f"Closed Chrome WebDriver")
             driver.quit()
             
+            # If we have image data, use it for prioritization, otherwise use the high_quality_urls directly
+            if image_data:
+                # Import the should_prefer_png function from utils.qa
+                try:
+                    from ..utils.qa import should_prefer_png
+                    has_preference_function = True
+                except ImportError:
+                    has_preference_function = False
+                
+                # First, filter out any duplicates and invalid URLs
+                filtered_image_data = []
+                seen_urls = set()
+                
+                for img in image_data:
+                    url = img['url']
+                    
+                    # Skip Google's own logos, icons, redirects, and duplicates
+                    if (any(pattern in url.lower() for pattern in ["google", "gstatic", "googleusercontent", "fonts.googleapis"]) or
+                        any(pattern in url.lower() for pattern in ["icon", "favicon"]) or
+                        "imgres?" in url or "url?" in url or
+                        url in seen_urls):
+                        continue
+                    
+                    # Only include valid URLs
+                    if url.startswith('http'):
+                        filtered_image_data.append(img)
+                        seen_urls.add(url)
+                
+                # Now apply advanced prioritization
+                prioritized_image_data = []
+                remaining_image_data = filtered_image_data.copy()
+                
+                # Look for SVG images first (absolute top priority)
+                svg_images = [img for img in remaining_image_data if img['format'] and img['format'].lower() == 'svg']
+                if svg_images:
+                    # SVGs found, always use them first
+                    print("Found SVG images - prioritizing these first (gold standard)")
+                    for img in svg_images:
+                        prioritized_image_data.append(img)
+                        if img in remaining_image_data:
+                            remaining_image_data.remove(img)
+                
+                # Apply domain-based prioritization as before
+                # Priority 1: Company domain + 'logo' in filename
+                domain_logo_images = [img for img in remaining_image_data 
+                                    if self.domain in img['url'].lower() and 'logo' in img['url'].lower()]
+                
+                for img in domain_logo_images:
+                    if img in remaining_image_data:
+                        prioritized_image_data.append(img)
+                        remaining_image_data.remove(img)
+                        print(f"Priority 1 - Domain+Logo URL: {img['url']}")
+                
+                # Priority 2: Any URL from company domain
+                domain_images = [img for img in remaining_image_data if self.domain in img['url'].lower()]
+                for img in domain_images:
+                    if img in remaining_image_data:
+                        prioritized_image_data.append(img)
+                        remaining_image_data.remove(img)
+                        print(f"Priority 2 - Domain URL: {img['url']}")
+                
+                # Priority 3: URLs with 'logo' in path (excluding social media)
+                social_domains = ["twitter.com", "facebook.com", "linkedin.com", "instagram.com", 
+                                "youtube.com", "pinterest.com", "tumblr.com"]
+                
+                logo_images = [img for img in remaining_image_data 
+                            if 'logo' in img['url'].lower() 
+                            and not any(social in img['url'].lower() for social in social_domains)]
+                
+                for img in logo_images:
+                    if img in remaining_image_data:
+                        prioritized_image_data.append(img)
+                        remaining_image_data.remove(img)
+                        print(f"Priority 3 - Logo URL: {img['url']}")
+                
+                # Priority 4: Remaining URLs (excluding social media)
+                other_images = [img for img in remaining_image_data 
+                             if not any(social in img['url'].lower() for social in social_domains)]
+                
+                for img in other_images:
+                    prioritized_image_data.append(img)
+                    print(f"Priority 4 - Other URL: {img['url']}")
+                
+                # Apply PNG preference logic if we have the function and dimensions
+                if has_preference_function and len(prioritized_image_data) > 1:
+                    # Look for potential PNG preference candidates
+                    png_images = [img for img in prioritized_image_data 
+                                if img['format'] and img['format'].lower() == 'png']
+                    other_images = [img for img in prioritized_image_data 
+                                  if img['format'] and img['format'].lower() in ['jpg', 'jpeg', 'webp']]
+                    
+                    if png_images and other_images:
+                        # Check for cases where PNG should be preferred over similar-sized JPG/WEBP
+                        for png_img in png_images:
+                            for other_img in other_images:
+                                # Skip if either doesn't have dimensions
+                                if not (png_img.get('width') and png_img.get('height') and 
+                                        other_img.get('width') and other_img.get('height')):
+                                    continue
+                                
+                                # If dimensions are similar and PNG is not already higher priority
+                                png_idx = prioritized_image_data.index(png_img)
+                                other_idx = prioritized_image_data.index(other_img)
+                                
+                                if other_idx < png_idx and should_prefer_png(png_img, other_img):
+                                    print(f"Promoting PNG ({png_img['url']}) over {other_img['format']} ({other_img['url']}) due to similar dimensions")
+                                    # Promote PNG by swapping positions
+                                    prioritized_image_data[other_idx], prioritized_image_data[png_idx] = prioritized_image_data[png_idx], prioritized_image_data[other_idx]
+                
+                # Extract just the URLs in the newly prioritized order
+                prioritized_urls = [img['url'] for img in prioritized_image_data]
+                
+                if prioritized_urls:
+                    filtered_urls = prioritized_urls
+                    print(f"Final prioritized URLs: {filtered_urls[:3]}")
+                    # Return top 3 URLs
+                    return filtered_urls[:3]
+            
+            # If no image data or processing failed, fall back to the original prioritization
             # Filter out any duplicates while preserving order
             filtered_urls = []
             for url in high_quality_urls:
@@ -823,6 +1015,330 @@ class GoogleExtractor(BaseExtractor):
             traceback.print_exc()
             return []
 
+    def _get_image_format_from_url(self, url):
+        """Extract image format from URL"""
+        if not url:
+            return None
+            
+        # Try to extract extension from URL
+        extensions = {
+            '.svg': 'svg',
+            '.png': 'png',
+            '.jpg': 'jpg',
+            '.jpeg': 'jpg',
+            '.webp': 'webp',
+            '.gif': 'gif'
+        }
+        
+        for ext, format_name in extensions.items():
+            if ext in url.lower():
+                return format_name
+                
+        # If no extension found, check content type in URL if present
+        content_types = {
+            'image/svg': 'svg',
+            'image/png': 'png',
+            'image/jpeg': 'jpg',
+            'image/webp': 'webp',
+            'image/gif': 'gif'
+        }
+        
+        for content_type, format_name in content_types.items():
+            if content_type in url.lower():
+                return format_name
+                
+        return None
+
+    def _extract_logo_urls_with_selenium_fast(self, search_query):
+        """Use Selenium to extract logo URLs from Google Images quickly without clicking thumbnails."""
+        try:
+            # Initialize Chrome WebDriver
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--window-size=1920,1080")
+            
+            service = ChromeService(executable_path=self.chromedriver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            
+            # Set short timeout for finding elements
+            wait = WebDriverWait(driver, 2)
+            
+            # Format the search query for the URL
+            formatted_query = quote_plus(search_query)
+            url = f"https://www.google.com/search?q={formatted_query}&tbm=isch"
+            
+            print(f"Fast extraction - Search query: {search_query}")
+            print(f"Navigating to Google Images search URL: {url}")
+            
+            # Navigate to Google Images
+            driver.get(url)
+            time.sleep(1)  # Brief pause to let the page load
+            
+            # Collect all image URLs directly from the search results page
+            image_urls = []
+            image_data = []  # Store image data with dimensions and format
+            
+            # Try multiple selectors for image thumbnails
+            selectors = [
+                "img.Q4LuWd",  # Common thumbnail class
+                "div.bRMDJf img",  # Another common container
+                "img.rg_i",  # Alternative class
+                "div.fR6src img"  # Another possible container
+            ]
+            
+            for selector in selectors:
+                try:
+                    thumbnails = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if thumbnails and len(thumbnails) > 0:
+                        print(f"Found {len(thumbnails)} thumbnails with selector {selector}")
+                        
+                        # Extract source and data-src attributes from thumbnails
+                        for img in thumbnails[:10]:  # Limit to first 10 results
+                            try:
+                                # Check for full-size image URL in data attributes
+                                src = img.get_attribute("src")
+                                data_src = img.get_attribute("data-src")
+                                
+                                # Sometimes the image URL is stored in different attributes
+                                url_candidates = [
+                                    src,
+                                    data_src,
+                                    img.get_attribute("data-iurl")
+                                ]
+                                
+                                for candidate in url_candidates:
+                                    if candidate and candidate.startswith("http") and not candidate.startswith("data:"):
+                                        # Skip Google's own logos
+                                        if "google" in candidate.lower() or "gstatic" in candidate.lower():
+                                            continue
+                                        
+                                        if self._is_valid_url(candidate) and candidate not in image_urls:
+                                            # Try to get dimensions
+                                            width = None
+                                            height = None
+                                            try:
+                                                width = int(img.get_attribute("width") or 0)
+                                                height = int(img.get_attribute("height") or 0)
+                                            except:
+                                                pass
+                                            
+                                            # Add image data with format
+                                            image_format = self._get_image_format_from_url(candidate)
+                                            image_data.append({
+                                                'url': candidate,
+                                                'width': width,
+                                                'height': height,
+                                                'format': image_format
+                                            })
+                                            
+                                            image_urls.append(candidate)
+                            except Exception as e:
+                                continue
+                                
+                        if image_urls:
+                            break  # Stop if we found enough images
+                except Exception:
+                    continue
+            
+            # If we didn't find enough images, try extracting from page source
+            if len(image_urls) < 3:
+                try:
+                    page_source = driver.page_source
+                    
+                    # Look for full-size image URLs in the page source
+                    url_pattern = r'"ou":"(https?://[^"]+)"'
+                    matches = re.findall(url_pattern, page_source)
+                    
+                    for url in matches:
+                        if url.startswith('http') and url not in image_urls:
+                            # Skip Google's own logos
+                            if "google" in url.lower() or "gstatic" in url.lower():
+                                continue
+                                
+                            if self._is_valid_url(url):
+                                # Add to image data with format
+                                image_format = self._get_image_format_from_url(url)
+                                image_data.append({
+                                    'url': url,
+                                    'width': None,
+                                    'height': None,
+                                    'format': image_format
+                                })
+                                
+                                image_urls.append(url)
+                                if len(image_urls) >= 10:
+                                    break
+                except Exception:
+                    pass
+            
+            driver.quit()
+            
+            # If we have image data, use it for prioritization
+            if image_data:
+                # Import the should_prefer_png function from utils.qa
+                try:
+                    from ..utils.qa import should_prefer_png
+                    has_preference_function = True
+                except ImportError:
+                    has_preference_function = False
+                
+                # First, filter out any duplicates and invalid URLs
+                filtered_image_data = []
+                seen_urls = set()
+                
+                for img in image_data:
+                    url = img['url']
+                    
+                    # Skip Google's own logos, icons, redirects, and duplicates
+                    if (any(pattern in url.lower() for pattern in ["google", "gstatic", "googleusercontent", "fonts.googleapis"]) or
+                        any(pattern in url.lower() for pattern in ["icon", "favicon"]) or
+                        "imgres?" in url or "url?" in url or
+                        url in seen_urls):
+                        continue
+                    
+                    # Only include valid URLs
+                    if url.startswith('http'):
+                        filtered_image_data.append(img)
+                        seen_urls.add(url)
+                
+                # Now apply advanced prioritization
+                prioritized_image_data = []
+                remaining_image_data = filtered_image_data.copy()
+                
+                # Look for SVG images first (absolute top priority)
+                svg_images = [img for img in remaining_image_data if img['format'] and img['format'].lower() == 'svg']
+                if svg_images:
+                    # SVGs found, always use them first
+                    print("Found SVG images - prioritizing these first (gold standard)")
+                    for img in svg_images:
+                        prioritized_image_data.append(img)
+                        if img in remaining_image_data:
+                            remaining_image_data.remove(img)
+                
+                # Priority 1: Company domain + 'logo' in filename
+                domain_logo_images = [img for img in remaining_image_data 
+                                    if self.domain in img['url'].lower() and 'logo' in img['url'].lower()]
+                
+                for img in domain_logo_images:
+                    if img in remaining_image_data:
+                        prioritized_image_data.append(img)
+                        remaining_image_data.remove(img)
+                
+                # Priority 2: Any URL from company domain
+                domain_images = [img for img in remaining_image_data if self.domain in img['url'].lower()]
+                for img in domain_images:
+                    if img in remaining_image_data:
+                        prioritized_image_data.append(img)
+                        remaining_image_data.remove(img)
+                
+                # Priority 3: URLs with 'logo' in path (excluding social media)
+                social_domains = ["twitter.com", "facebook.com", "linkedin.com", "instagram.com", 
+                                "youtube.com", "pinterest.com", "tumblr.com"]
+                
+                logo_images = [img for img in remaining_image_data 
+                            if 'logo' in img['url'].lower() 
+                            and not any(social in img['url'].lower() for social in social_domains)]
+                
+                for img in logo_images:
+                    if img in remaining_image_data:
+                        prioritized_image_data.append(img)
+                        remaining_image_data.remove(img)
+                
+                # Priority 4: Remaining URLs (excluding social media)
+                other_images = [img for img in remaining_image_data 
+                             if not any(social in img['url'].lower() for social in social_domains)]
+                
+                for img in other_images:
+                    prioritized_image_data.append(img)
+                
+                # Apply PNG preference logic if we have the function and dimensions
+                if has_preference_function and len(prioritized_image_data) > 1:
+                    # Look for potential PNG preference candidates
+                    png_images = [img for img in prioritized_image_data 
+                                if img['format'] and img['format'].lower() == 'png']
+                    other_images = [img for img in prioritized_image_data 
+                                  if img['format'] and img['format'].lower() in ['jpg', 'jpeg', 'webp']]
+                    
+                    if png_images and other_images:
+                        # Check for cases where PNG should be preferred over similar-sized JPG/WEBP
+                        for png_img in png_images:
+                            for other_img in other_images:
+                                # Skip if either doesn't have dimensions
+                                if not (png_img.get('width') and png_img.get('height') and 
+                                        other_img.get('width') and other_img.get('height')):
+                                    continue
+                                
+                                # If dimensions are similar and PNG is not already higher priority
+                                png_idx = prioritized_image_data.index(png_img)
+                                other_idx = prioritized_image_data.index(other_img)
+                                
+                                if other_idx < png_idx and should_prefer_png(png_img, other_img):
+                                    print(f"Promoting PNG ({png_img['url']}) over {other_img['format']} ({other_img['url']}) due to similar dimensions")
+                                    # Promote PNG by swapping positions
+                                    prioritized_image_data[other_idx], prioritized_image_data[png_idx] = prioritized_image_data[png_idx], prioritized_image_data[other_idx]
+                
+                # Extract just the URLs in the newly prioritized order
+                prioritized_urls = [img['url'] for img in prioritized_image_data]
+                
+                if prioritized_urls:
+                    # Return top 3 URLs
+                    return prioritized_urls[:3]
+            
+            # If image data approach failed, fall back to original method
+            # Create priority ordered list of URLs
+            prioritized_urls = []
+            remaining_urls = image_urls.copy()
+            
+            # Priority 1: Company domain + 'logo' in filename
+            domain_logo_urls = [url for url in remaining_urls 
+                              if self.domain in url.lower() and 'logo' in url.lower()]
+            
+            for url in domain_logo_urls:
+                if url in remaining_urls:
+                    prioritized_urls.append(url)
+                    remaining_urls.remove(url)
+            
+            # Priority 2: Any URL from company domain
+            domain_urls = [url for url in remaining_urls if self.domain in url.lower()]
+            for url in domain_urls:
+                if url in remaining_urls:
+                    prioritized_urls.append(url)
+                    remaining_urls.remove(url)
+            
+            # Priority 3: URLs with 'logo' in path (excluding social media)
+            social_domains = ["twitter.com", "facebook.com", "linkedin.com", "instagram.com", 
+                            "youtube.com", "pinterest.com", "tumblr.com"]
+            
+            logo_urls = [url for url in remaining_urls 
+                        if 'logo' in url.lower() 
+                        and not any(social in url.lower() for social in social_domains)]
+            
+            for url in logo_urls:
+                if url in remaining_urls:
+                    prioritized_urls.append(url)
+                    remaining_urls.remove(url)
+            
+            # Priority 4: Remaining URLs (excluding social media)
+            other_urls = [url for url in remaining_urls 
+                         if not any(social in url.lower() for social in social_domains)]
+            
+            for url in other_urls:
+                prioritized_urls.append(url)
+            
+            # Return top 3 URLs
+            return prioritized_urls[:3]
+            
+        except Exception as e:
+            print(f"Fast Selenium extraction failed: {str(e)}")
+            try:
+                driver.quit()
+            except:
+                pass
+            return []
+            
     def _extract_image_urls_from_google(self, query, num_images=5):
         """
         Extract image URLs from Google Image search results using HTTP requests
@@ -868,22 +1384,197 @@ class GoogleExtractor(BaseExtractor):
         # Use Selenium for highest quality results
         if SELENIUM_AVAILABLE:
             try:
+                # Try the fast extraction method first
+                selenium_urls = self._extract_logo_urls_with_selenium_fast(f"{self.domain} logo")
+                
+                if selenium_urls:
+                    # Filter out any invalid URLs
+                    valid_urls = [url for url in selenium_urls if self._is_valid_url(url)]
+                    if valid_urls:
+                        print(f"Found {len(valid_urls)} logo URLs using fast Selenium method")
+                        # Download and check all candidate images first
+                        return self._download_and_prioritize_logos(valid_urls, folder_path)
+                    else:
+                        print("No valid URLs found from fast Selenium method.")
+                else:
+                    print("No results found with fast Selenium method.")
+                    
+                # If fast method fails, try the original more thorough method
+                print("Falling back to original Selenium method...")
                 selenium_urls = self._extract_logo_urls_with_selenium(f"{self.domain} logo")
                 
                 if selenium_urls:
                     # Filter out any invalid URLs
                     valid_urls = [url for url in selenium_urls if self._is_valid_url(url)]
                     if valid_urls:
-                        print(f"Found {len(valid_urls)} high-quality logo URLs using Selenium")
-                        return valid_urls
+                        print(f"Found {len(valid_urls)} high-quality logo URLs using original Selenium method")
+                        # Download and check all candidate images first
+                        return self._download_and_prioritize_logos(valid_urls, folder_path)
                     else:
-                        print("No valid URLs found from Selenium.")
+                        print("No valid URLs found from original Selenium method.")
                 else:
-                    print("No results found with Selenium.")
+                    print("No results found with original Selenium method.")
             except Exception as e:
                 print(f"Error using Selenium: {e}")
                 print("Selenium approach failed.")
         else:
             print("Selenium not available. Install selenium package for better results.")
         
-        return []  # Return empty list if all approaches fail 
+        return []  # Return empty list if all approaches fail
+        
+    def _download_and_prioritize_logos(self, urls, folder_path):
+        """
+        Download all candidate logo images and prioritize them based on actual dimensions and format
+        
+        Args:
+            urls (list): List of image URLs to download
+            folder_path (str): Path to folder where images should be saved
+            
+        Returns:
+            list: List of prioritized URLs, with best options first
+        """
+        # Import the should_prefer_png function from utils.qa
+        try:
+            from ..utils.qa import should_prefer_png, get_image_dimensions
+            has_preference_function = True
+        except ImportError:
+            has_preference_function = False
+            
+        # Download all images and collect metadata
+        downloaded_images = []
+        
+        for i, url in enumerate(urls):
+            try:
+                print(f"Downloading candidate logo {i+1}/{len(urls)}: {url}")
+                output_path = os.path.join(folder_path, f"logo_candidate_{i}.tmp")
+                downloaded_path = self._download_image(url, output_path)
+                
+                if downloaded_path:
+                    # Get actual image dimensions and format from the downloaded file
+                    width, height = 0, 0
+                    if has_preference_function:
+                        try:
+                            width, height = get_image_dimensions(downloaded_path)
+                        except:
+                            pass
+                            
+                    # Get format from file extension
+                    _, ext = os.path.splitext(downloaded_path)
+                    image_format = ext.lower().lstrip('.')
+                    
+                    # Add to downloaded images list
+                    downloaded_images.append({
+                        'url': url,
+                        'path': downloaded_path,
+                        'width': width,
+                        'height': height,
+                        'format': image_format
+                    })
+                    
+                    print(f"Successfully downloaded: {url}, dimensions: {width}x{height}, format: {image_format}")
+            except Exception as e:
+                print(f"Error downloading {url}: {e}")
+        
+        # If no images were downloaded successfully, return empty list
+        if not downloaded_images:
+            return []
+        
+        # Now apply advanced prioritization
+        prioritized_images = []
+        remaining_images = downloaded_images.copy()
+        
+        # Look for SVG images first (absolute top priority)
+        svg_images = [img for img in remaining_images if img['format'] and img['format'].lower() == 'svg']
+        if svg_images:
+            # SVGs found, always use them first
+            print("Found SVG images - prioritizing these first (gold standard)")
+            for img in svg_images:
+                prioritized_images.append(img)
+                if img in remaining_images:
+                    remaining_images.remove(img)
+        
+        # Apply domain-based prioritization as before
+        # Priority 1: Company domain + 'logo' in filename
+        domain_logo_images = [img for img in remaining_images 
+                            if self.domain in img['url'].lower() and 'logo' in img['url'].lower()]
+        
+        for img in domain_logo_images:
+            if img in remaining_images:
+                prioritized_images.append(img)
+                remaining_images.remove(img)
+                print(f"Priority 1 - Domain+Logo URL: {img['url']}")
+        
+        # Priority 2: Any URL from company domain
+        domain_images = [img for img in remaining_images if self.domain in img['url'].lower()]
+        for img in domain_images:
+            if img in remaining_images:
+                prioritized_images.append(img)
+                remaining_images.remove(img)
+                print(f"Priority 2 - Domain URL: {img['url']}")
+        
+        # Priority 3: URLs with 'logo' in path (excluding social media)
+        social_domains = ["twitter.com", "facebook.com", "linkedin.com", "instagram.com", 
+                        "youtube.com", "pinterest.com", "tumblr.com"]
+        
+        logo_images = [img for img in remaining_images 
+                    if 'logo' in img['url'].lower() 
+                    and not any(social in img['url'].lower() for social in social_domains)]
+        
+        for img in logo_images:
+            if img in remaining_images:
+                prioritized_images.append(img)
+                remaining_images.remove(img)
+                print(f"Priority 3 - Logo URL: {img['url']}")
+        
+        # Priority 4: Remaining URLs (excluding social media)
+        other_images = [img for img in remaining_images 
+                     if not any(social in img['url'].lower() for social in social_domains)]
+        
+        for img in other_images:
+            prioritized_images.append(img)
+            print(f"Priority 4 - Other URL: {img['url']}")
+        
+        # Apply PNG preference logic if we have the function and dimensions
+        if has_preference_function and len(prioritized_images) > 1:
+            # Look for potential PNG preference candidates
+            png_images = [img for img in prioritized_images 
+                        if img['format'] and img['format'].lower() == 'png']
+            other_images = [img for img in prioritized_images 
+                          if img['format'] and img['format'].lower() in ['jpg', 'jpeg', 'webp']]
+            
+            if png_images and other_images:
+                # Check for cases where PNG should be preferred over similar-sized JPG/WEBP
+                for png_img in png_images:
+                    for other_img in other_images:
+                        # Skip if either doesn't have dimensions
+                        if not (png_img.get('width') and png_img.get('height') and 
+                                other_img.get('width') and other_img.get('height')):
+                            continue
+                        
+                        # If dimensions are similar and PNG is not already higher priority
+                        png_idx = prioritized_images.index(png_img)
+                        other_idx = prioritized_images.index(other_img)
+                        
+                        if other_idx < png_idx and should_prefer_png(png_img, other_img):
+                            print(f"Promoting PNG ({png_img['url']}) over {other_img['format']} ({other_img['url']}) due to similar dimensions")
+                            print(f"PNG: {png_img['width']}x{png_img['height']}, Other: {other_img['width']}x{other_img['height']}")
+                            # Promote PNG by swapping positions
+                            prioritized_images[other_idx], prioritized_images[png_idx] = prioritized_images[png_idx], prioritized_images[other_idx]
+        
+        # Extract just the URLs in the newly prioritized order
+        prioritized_urls = [img['url'] for img in prioritized_images]
+        
+        # Cleanup temporary files
+        for img in downloaded_images:
+            try:
+                if os.path.exists(img['path']):
+                    os.remove(img['path'])
+            except:
+                pass
+                
+        if prioritized_urls:
+            print(f"Final prioritized URLs after download analysis: {prioritized_urls[:3]}")
+            # Return top 3 URLs
+            return prioritized_urls[:3]
+            
+        return [] 
